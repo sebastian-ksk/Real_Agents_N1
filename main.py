@@ -43,8 +43,9 @@ Sens_Lev={
 
 PWP=25
 CROP_DEFAULT='Onion'
-
-
+PRESC_MODE='Moisture_Sensors'
+STAR_DATE=date(2020,2,1)
+CONT_DAYS=0
 
 Level=0
 Flag_Pet=False
@@ -87,7 +88,7 @@ class PumpStation():
         self.client.subscribe(topic='Pump_prueba/SanRafael', qos=0)
 
     def on_message(self,client, userdata, message):
-        global Date_R,Fl_Irr,Fl_IrrN,New_pr,Fl_petp
+        global Date_R,Fl_Irr,Fl_IrrN,NEW_PRESC,Fl_petp
         print('------------------------------')
         print('topic: %s' % message.topic)
         print('payload: %s' % message.payload)
@@ -102,38 +103,47 @@ class PumpStation():
                 Fl_Irr=True                             #activa bandera de reigo por prescripcion local
             elif data[1].split(";")[0]=="Neg":          #si es Neg
                 lote=int(data[1].split(";")[1])-1       #lote es el numero enviado - 1 para que arreglo comience desde cero
-                New_pr[lote]=data[1].split(";")[2]      #se guarda el dato del nuevo valor de prescipcion 
+                NEW_PRESC=data[1].split(";")[2]      #se guarda el dato del nuevo valor de prescipcion 
                 Fl_IrrN=True                            #se activa bandera de riego por negociacion
             pass 
 
-    def Init_Menu(self):    
-        print("TIPO DE CULTIVO :")
-        crops={1:"Maize",2:"Potato",3:"Tomato",4:"Barley",5:"Wheat",6:"Quinoa",7:"Onion"}
-        for i in range(len(crops)):
-            print(str(i+1)+". "+str(crops[i+1]))
-        print("TIPO DE CULTIVO :" , end="")    
-        sel=input()
-        print("continuar")
-        CROP_DEFAULT=crops[int(sel)]
-        print("cultivo:" + CROP_DEFAULT) 
-        print("DIA DE INICIO: ", end="")
-        day=input()
-        print("MES DE INCIIO: ", end="")
-        month=input()
-        print("AÑO DE INCIIO: ", end="")
-        year=input()
-        print("MODO DE PRESCRIPCION")
-        prespc={1:"Moisture_Sensors",2:"Weather_Station"}
-        for i in range(len(prespc)):
-            print(str(i+1)+". "+str(prespc[i+1]))
-        print("INGRESE MODO DE PRESCIPCION")
-
+    def Init_Menu(self): 
+        global PWP,STAR_DATE,CROP_DEFAULT   
+        try:
+            print("TIPO DE CULTIVO :")
+            crops={1:"Maize",2:"Potato",3:"Tomato",4:"Barley",5:"Wheat",6:"Quinoa",7:"Onion"}
+            for i in range(len(crops)):
+                print(str(i+1)+". "+str(crops[i+1]))
+            print("TIPO DE CULTIVO :" , end="")    
+            sel=input()
+            print("continuar")
+            CROP_DEFAULT=crops[int(sel)]
+            print("cultivo:" + CROP_DEFAULT) 
+            print("DIA DE INICIO: ", end="")
+            day=input()
+            print("MES DE INCIIO: ", end="")
+            month=input()
+            print("AÑO DE INCIIO: ", end="")
+            year=input()
+            STAR_DATE=date(int(year),int(month),int(day))
+            print("DAY START CROP: "+ str(STAR_DATE))
+            print("MODO DE PRESCRIPCION")
+            prespc={1:"Moisture_Sensors",2:"Weather_Station"}
+            for i in range(len(prespc)):
+                print(str(i+1)+". "+str(prespc[i+1]))
+            print("INGRESE MODO DE PRESCIPCION: ", end="")
+            sel=input()
+            PRESC_MODE=prespc[int(sel)]
+            print("INGRESE PUNTO DE MARCHITEZ PERMANENTE: ")
+            PWP=float(input())
+        except:
+            print("error ingreso erroneo de datos....")
         return
 
     #------------------------------------------------------------------------- 
     def Princip_Funcion(self):
         global Date_R,Fl_Irr,Fl_IrrN,New_pr,Fl_petp,Fl_Pres
-        global Date_R
+        global CROP_DEFAULT,PRESC_MODE,CONT_DAYS,NEW_PRESC
         global device
         print("init")
 
@@ -141,30 +151,50 @@ class PumpStation():
             today = str(date.today()).split()[0]
             if(Date_R=="2020-11-03"):
                 if Fl_Pres==False and Fl_petp==True:
-                    presc=self.Weather_Station_presc(10)
-                    presc=self.Moisture_Sensor_Presc(10)
+                    if PRESC_MODE=='Moisture_Sensors':
+                        presc=self.Moisture_Sensor_Presc(CONT_DAYS)
+                    elif PRESC_MODE=='Weather_Station':            
+                        presc=self.Weather_Station_presc(CONT_DAYS)
+                        
                     print("prescripcion= "+str(presc))
                     self.client.publish("Ag/SanRafael/Block22","Rp:"+str(presc),qos=2) 
                     Fl_Pres=True 
                     
-                if Fl_Pres==True and Fl_Irr==True:
-                    print("enviar riego "+str(presc))
-                    try:             
-                        print(".....................")
-                        print("...enviando riego...")
-                        print('device', device) 
-                        remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string('0013A20040BE17CE'))
-                        device.send_data(remote_device,'SITASK='+str(presc)+'; \n')
-                        file_HiD= open('History_Data.txt', 'a',errors='ignore')
-                        file_HiD.write("NO;"+str(datetime.now()).split()[1]+'\n')
-                        file_HiD.close()
-                    except:
-                        print('Troubles in the communication')
-                        device.close()
-                    Fl_Irr=False 
-                    Fl_petp=False   
-                    Fl_Pres=False
-        
+                if Fl_Pres==True:
+                    if Fl_Irr==True:
+                        print("enviar riego: "+str(presc))
+                        self.Send_irr_order(CONT_DAYS,"NO","History_Data.txt",presc)
+                        Fl_Irr=False
+
+                    if Fl_IrrN==True:    
+                        presc=NEW_PRESC
+                        print("enviar riego: "+str(presc))
+                        self.Send_irr_order(CONT_DAYS,"SI","History_Data_PS.txt",presc)
+
+                        Fl_Irr=False
+
+    def Send_irr_order(self,day,neg,dir_file,presc):
+        global CONT_DAYS
+        try:             
+            print(".....................")
+            print("...enviando riego...")
+            print('device', device) 
+            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string('0013A20040BE17CE'))
+            device.send_data(remote_device,'SITASK='+str(presc)+'; \n')
+            file_HiD= open(dir_file, 'a',errors='ignore')
+            file_HiD.write(neg+";"+str(datetime.now()).split()[1]+'\n')
+            file_HiD.close()
+            CONT_DAYS+=1
+
+        except:
+            print('Troubles in the communication')
+            device.close()
+        Fl_Irr=False 
+        Fl_petp=False   
+        Fl_Pres=False
+
+
+
     def Moisture_Sensor_Presc(self,n):
         global PWP,CROP_DEFAULT,Sens_Lev  
         crop=CROP_DEFAULT    
