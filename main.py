@@ -145,7 +145,7 @@ class PumpStation():
             PWP=float(input())
             print("INGRESE CAPACIDAD DE CAMPO %: ")
             FIELD_CAPACITY=float(input())
-            
+
         except:
             print("error ingreso erroneo de datos....")
         return
@@ -299,8 +299,8 @@ class PumpStation():
         if n!=0:
             file_HiD= open('History_Data.txt', 'r',errors='ignore')
             data = file_HiD.read().splitlines()
-            Irr=float(data[-2].split(';')[3]) #toma el riego de el dia anterior
-            depl=float(data[-2].split(';')[4])  #toma la deplecion de el dia anterior  cuento ha disminuido 
+            Irr=float(data[-1].split(';')[3]) #toma el riego de el dia anterior
+            depl=float(data[-1].split(';')[4])  #toma la deplecion de el dia anterior  cuento ha disminuido 
             file_HiD.close
         else:
             Irr=0		
@@ -338,10 +338,11 @@ class PumpStation():
 
         today = str(datetime.now()).split()[0]
         hour  = str(datetime.now()).split()[1]
+        
         file_HiD= open('History_Data.txt', 'a',errors='ignore')
         file_HiD.write(f"Moisture_Sensors;{today};{hour};{irr_pres_net};{deficit};{Kc};{sp_rootdepth};{d_TAW};{d_MAD};{Ks};{ETcadj};{eff_rain};{ETc};")
-        file_HiD.close()
         
+        file_HiD.close()    
         return irr_pres_net
 
 
@@ -420,8 +421,8 @@ class Sens_Data():
         source=xbee_message.remote_device.get_64bit_addr()
         source1=str(source)  
         message=str(xbee_message.data.decode())
+        print(str(datetime.now()).split()[1])
         print(str(xbee_message.data.decode()))
-        print(source)
         message=message.split(":")
         if message[0]=="IRRIG":
             print(message[1])   
@@ -430,7 +431,8 @@ class Sens_Data():
                 dir_file="History_Data.txt"
                 valve=str(message[1].split(";")[1])
                 time_apl=str(message[1].split(";")[2])   #time en seconds
-                Sensor_pulses=str(message[1].split(";")[3])
+                Sensor_pulses=float(message[1].split(";")[3].replace('\x00',''))
+
                 End_H_Ap=[datetime.now().hour,datetime.now().minute]
                 file_HiD= open(dir_file, 'a',errors='ignore')
                 file_HiD.write(f"{End_H_Ap[0]}:{End_H_Ap[1]};{valve};{time_apl};{Sensor_pulses};#\r\n")
@@ -444,11 +446,25 @@ class Sens_Data():
                 file_HiD.close()
 
         elif message[0]=="SENSORS":
+                WCs=[float(message[1].split(";")[0]),float(message[1].split(";")[1]),
+                float(message[1].split(";")[2]),float(message[1].split(";")[3])]
+                Relative_Hum=float(message[1].split(";")[4])
+                Canopy_Tem=float(message[1].split(";")[5])
+                Relative_Tem=float(message[1].split(";")[6])
+
+                Hour_Rc=str(datetime.now()).split()[1]
+                Date_Rc=str(datetime.now()).split()[0]
+                for i in range(len(WCs)):
+                    #falta definir la curva de sensores calibrada
+                    WCs[i]=round(((WCs[i]*100)/1023),2)
+
                 dir_file="Sensors_Data.txt"
-                file_HiD= open(dir_file, 'a',errors='ignore')
-                file_HiD.write(f"{message[1]};\n")
+                file_HiD= open(dir_file, 'a',errors='ignore')                
+                file_HiD.write(f"{Date_Rc};{Hour_Rc};{WCs[0]};{WCs[1]};{WCs[2]};{WCs[3]};{Relative_Hum};{Canopy_Tem};{Relative_Tem};\n")
                 file_HiD.close()  
+
                 
+
 
 def main():
     print ('START !')
