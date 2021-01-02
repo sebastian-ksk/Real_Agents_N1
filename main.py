@@ -17,6 +17,10 @@ from datetime import time as tm
 import random
 from digi.xbee.devices import XBeeDevice, RemoteXBeeDevice,XBee64BitAddress,OperatingMode,RemoteATCommandPacket
 import math
+#firebase
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import db
 
 
 #cooeficientes de cultivos
