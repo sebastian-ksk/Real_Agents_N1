@@ -69,6 +69,40 @@ New_pr=[0]*1092 #prescripciones nuevas por negociacion
 device=XBeeDevice("/dev/ttyUSB0",9600)
 device.open()
 
+#-------------Firebase--------------
+PAHT_CRED = '/home/pi/Desktop/Agent_N1/Clave_Firebase.json'
+URL_DB = 'https://inteligentagent-2cac4-default-rtdb.firebaseio.com/'
+
+
+class FIREBASE_CLASS():
+    def __init__(self):
+        cred=credentials.Certificate(PAHT_CRED)
+        firebase_admin.initialize_app(cred,{
+            'databaseURL':URL_DB
+        })      
+        self.refAgent=db.reference('Agent')
+        self.refCrop=self.refAgent.child('Crop')
+        self.refCultive_days=self.refAgent.child('Cultive_days')
+        self.reFild_Cap=self.refAgent.child('Field_Cap')
+        self.refId=self.refAgent.child('Id')
+        self.refIrrig_Hour=self.refAgent.child('Irrig_Hour')
+        self.refIrrig_aplied=self.refAgent.child('Irrig_applied')
+        self.refPwp=self.refAgent.child('PWP')
+        self.refPrescMethod=self.refAgent.child('Prescription_Method')
+        self.refSeedtime=self.refAgent.child('seedtime')
+
+    def Hour_applied_S(self):
+        global HOUR_IRRIG
+        prev_hour="--"
+        while True:
+            act_hour=self.refIrrig_Hour.get()
+            if act_hour != prev_hour:
+                HOUR_IRRIG[0]=str(act_hour).split(':')[0]
+                HOUR_IRRIG[1]=str(act_hour).split(':')[1]
+                print(f"hora de riego modificada: {act_hour} ")
+                prev_hour=act_hour
+        
+
 class PumpStation():
     def __init__(self): 
         global device
@@ -83,6 +117,11 @@ class PumpStation():
         self.client.username_pw_set( "agent" ,  password = "789.123" ) 
         self.client.loop_start()
         
+        self.FB=FIREBASE_CLASS()
+        self.subproces_Hour_Irrig=Thread(target=self.FB.Hour_applied_S)
+        self.subproces_Hour_Irrig.daemon=True
+        self.subproces_Hour_Irrig.start()
+
         self.SD= Sens_Data()
         self.subproces_Sens=Thread(target=self.SD.run)
         self.subproces_Sens.daemon=True
