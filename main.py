@@ -52,8 +52,9 @@ STAR_DATE=date(2020,12,1)
 CONT_DAYS=0
 HOUR_PRESC=[21,2]
 IRR_SPEED=1 #mm/s
-HOUR_IRRIG=[8,0] #hora de riego 
+HOUR_IRRIG=[9,0] #hora de riego 
 LOTE="SanRafael1"
+
 
 Level=0
 Flag_Pet=False
@@ -97,8 +98,8 @@ class FIREBASE_CLASS():
         while True:
             act_hour=self.refIrrig_Hour.get()
             if act_hour != prev_hour:
-                HOUR_IRRIG[0]=str(act_hour).split(':')[0]
-                HOUR_IRRIG[1]=str(act_hour).split(':')[1]
+                HOUR_IRRIG[0]=int(str(act_hour).split(':')[0])
+                HOUR_IRRIG[1]=int(str(act_hour).split(':')[1])
                 print(f"hora de riego modificada: {act_hour} ")
                 prev_hour=act_hour
         
@@ -126,11 +127,19 @@ class PumpStation():
         self.subproces_Sens=Thread(target=self.SD.run)
         self.subproces_Sens.daemon=True
         self.subproces_Sens.start()
+        self.FB.refCrop.set(CROP_DEFAULT)
+        self.FB.refCultive_days.set(CONT_DAYS)
+        self.FB.reFild_Cap.set(FIELD_CAPACITY)
+        self.FB.refId.set(LOTE)
+        self.FB.refPwp.set(PWP)
+        self.FB.refPrescMethod.set(PRESC_MODE)
+        self.FB.refSeedtime.set(str(STAR_DATE))
 
     #------------------------FUNCIONES MQTT-----------------------------------
     def on_connect(self,client, userdata, flags, rc):
         print('connected (%s)' % client._client_id)
         #suscripcion al agente Source
+
         self.client.subscribe(topic='Pump_prueba/SanRafael', qos=0)
         self.client.unsubscribe("Ag/#")
 
@@ -180,14 +189,13 @@ class PumpStation():
             prespc={1:"Moisture_Sensors",2:"Weather_Station"}
             for i in range(len(prespc)):
                 print(str(i+1)+". "+str(prespc[i+1]))
-            print("INGRESE MODO DE PRESCIPCION: ", end="")
+            print("INGRESE MODO DE PRESCRIPCION: ", end="")
             sel=input()
             PRESC_MODE=prespc[int(sel)]
             print("INGRESE PUNTO DE MARCHITEZ PERMANENTE: ")
             PWP=float(input())
             print("INGRESE CAPACIDAD DE CAMPO %: ")
             FIELD_CAPACITY=float(input())
-
         except:
             print("error ingreso erroneo de datos....")
         return
@@ -250,9 +258,11 @@ class PumpStation():
                     Fl_petp=False
 
                 if Fl_Pres==True:
+                    #print(str(HOUR_IRRIG))
                     hour_now=[datetime.now().hour,datetime.now().minute]
-                    hour_now=HOUR_IRRIG
+                    #hour_now=HOUR_IRRIG
                     if hour_now==HOUR_IRRIG:
+                        print(".")
                         if Fl_Irr==True:
                             Irr_time=presc/IRR_SPEED
                             print("enviar riego: "+str(presc))
