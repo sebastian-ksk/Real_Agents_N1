@@ -45,16 +45,17 @@ Sens_Lev={
 
 
 PWP=25
-FIELD_CAPACITY=80
+FIELD_CAPACITY=70
 CROP_DEFAULT='Onion'
 PRESC_MODE='Moisture_Sensors'
 STAR_DATE=date(2020,12,1)
 CONT_DAYS=0
-HOUR_PRESC=[21,2]
+HOUR_PRESC=[0,0]
 IRR_SPEED=1 #mm/s
 HOUR_IRRIG=[9,0] #hora de riego 
-LOTE="SanRafael1"
+LOTE="SanRafael"
 
+AGENT=''
 
 Level=0
 Flag_Pet=False
@@ -70,6 +71,12 @@ New_pr=[0]*1092 #prescripciones nuevas por negociacion
 device=XBeeDevice("/dev/ttyUSB0",9600)
 device.open()
 
+#agent#: ['PAN_ID DE NODO','DIRECCION DE XBEE ACTUADORES']
+Xbees_properties={'Agent_1': [b'\x00\x00\x00\x00\x00\x00\x02\x00','0013A20040BE17CE'], 
+'Agent_2': [b'\x00\x00\x00\x00\x00\x00\x03\x00','0013A20040E8762A'],
+'Agent_3': [b'\x00\x00\x00\x00\x00\x00\x04\x00','0013A20040E7412C'],
+'Agent_4': [b'\x00\x00\x00\x00\x00\x00\x05\x00','0013A20040DADF27']}
+
 #-------------Firebase--------------
 PAHT_CRED = '/home/pi/Desktop/Agent_N1/Clave_Firebase.json'
 URL_DB = 'https://inteligentagent-2cac4-default-rtdb.firebaseio.com/'
@@ -77,11 +84,13 @@ URL_DB = 'https://inteligentagent-2cac4-default-rtdb.firebaseio.com/'
 
 class FIREBASE_CLASS():
     def __init__(self):
+        global AGENT 
         cred=credentials.Certificate(PAHT_CRED)
         firebase_admin.initialize_app(cred,{
             'databaseURL':URL_DB
         })      
-        self.refAgent=db.reference('Agent')
+        self.refAgents=db.reference('Agent')
+        self.refAgent=self.refAgents.child(AGENT)
         self.refCrop=self.refAgent.child('Crop')
         self.refCultive_days=self.refAgent.child('Cultive_days')
         self.reFild_Cap=self.refAgent.child('Field_Cap')
@@ -106,8 +115,22 @@ class FIREBASE_CLASS():
 
 class PumpStation():
     def __init__(self): 
-        global device
-        
+        global device, AGENT,LOTE, Xbees_properties
+        print('INGRESE EL NUMERO DEL AGENTE A EJECUTAR [1-4]')
+        numero_agente=input()
+        while int(numero_agente) <0 or int(numero_agente)>4:
+            print('error [1-4]')
+            numero_agente=input()
+        AGENT='Agent_'+numero_agente
+        LOTE=LOTE+numero_agente
+        print(AGENT)
+        device.set_pan_id(Xbees_properties[AGENT][0])
+        while Xbees_properties[AGENT][0] != device.get_pan_id():
+            device.set_pan_id(Xbees_properties[AGENT][0])
+            time.sleep(0.1)
+        print("id xbee")
+        print(device.get_pan_id())
+
         #self.Init_Menu()
         print(".......")
         
@@ -254,12 +277,13 @@ class PumpStation():
                     file_HiD.close()
 
                     Report_Agent=f"{LOTE};{CROP_DEFAULT}.CRO;{str(STAR_DATE)};{presc};{Kc};{Ks};{CONT_DAYS};{CONT_WEEK};{root_depth};{Taw};{Mae};{PRESC_MODE};{VWC};{date_report};{hour_report}"
-                    self.client.publish("Ag/SanRafael/Block21",f"Rp:{Report_Agent}",qos=2) 
+                    self.client.publish("Ag/SanRafael/Block1",f"Rp:{Report_Agent}",qos=2) 
                     Fl_petp=False
 
                 if Fl_Pres==True:
-                    #print(str(HOUR_IRRIG))
+                    
                     hour_now=[datetime.now().hour,datetime.now().minute]
+                    #print(str(HOUR_IRRIG))
                     #hour_now=HOUR_IRRIG
                     if hour_now==HOUR_IRRIG:
                         print(".")
@@ -267,12 +291,14 @@ class PumpStation():
                             Irr_time=presc/IRR_SPEED
                             print("enviar riego: "+str(presc))
                             self.Send_irr_order(CONT_DAYS,"NO","History_Data.txt",Irr_time)
+                            self.FB.refIrrig_aplied.set(presc)
                             Fl_Irr=False
                             Fl_Pres=False
                         elif Fl_IrrN==True:    
                             Irr_time=NEW_PRESC/IRR_SPEED
                             print("enviar riego: "+str(Irr_time))
                             self.Send_irr_order(CONT_DAYS,"SI","History_Data.txt",Irr_time)
+                            self.FB.refIrrig_aplied.set(NEW_PRESC)
                             Fl_IrrN=False
                             Fl_Pres=False
                         else:
@@ -280,16 +306,17 @@ class PumpStation():
 
                    
     def Send_irr_order(self,day,neg,dir_file,presc):
-        global CONT_DAYS,Fl_Pres,Fl_Irr,Fl_IrrN
+        global CONT_DAYS,Fl_Pres,Fl_Irr,Fl_IrrN,Xbees_properties,AGENT
         try:             
             print(".....................")
             print("...enviando riego...")
             print('device', device) 
-            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string('0013A20040BE17CE'))
+            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(Xbees_properties[AGENT][1]))
             device.send_data(remote_device,'SITASK;'+'1;'+str(presc))
             file_HiD= open(dir_file, 'a',errors='ignore')
             file_HiD.write(f"{day};{neg};$;")
             file_HiD.close()
+            
         except:
             print('Troubles in the communication')
             device.close()
@@ -488,6 +515,8 @@ class Sens_Data():
 
     def data_receive_callback(self, xbee_message):
         global flag_seD,Fl_Irr_Conf
+
+
         source=xbee_message.remote_device.get_64bit_addr()
         source1=str(source)  
         message=str(xbee_message.data.decode())
@@ -506,6 +535,7 @@ class Sens_Data():
                 file_HiD= open(dir_file, 'a',errors='ignore')
                 file_HiD.write(f"{End_H_Ap[0]}:{End_H_Ap[1]};{valve};{time_apl};{Sensor_pulses};#\n")
                 file_HiD.close()
+
             else:
                 print("IRRIGATION START")
                 dir_file="History_Data.txt"
