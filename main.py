@@ -78,7 +78,7 @@ Xbees_properties={'Agent_1': [b'\x00\x00\x00\x00\x00\x00\x02\x00','0013A20040BE1
 'Agent_4': [b'\x00\x00\x00\x00\x00\x00\x05\x00','0013A20040DADF27']}
 
 #-------------Firebase--------------
-PAHT_CRED = '/home/pi/Desktop/Agent_N1/Clave_Firebase.json'
+PAHT_CRED = 'Clave_Firebase.json'
 URL_DB = 'https://inteligentagent-2cac4-default-rtdb.firebaseio.com/'
 
 
@@ -134,7 +134,7 @@ class PumpStation():
         #self.Init_Menu()
         print(".......")
         
-        self.client =paho.mqtt.client.Client(client_id='Real_Agent', clean_session=False)
+        self.client =paho.mqtt.client.Client(client_id='Real_'+AGENT, clean_session=False)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.connect(host='104.248.53.140', port=1883)
@@ -163,14 +163,14 @@ class PumpStation():
         print('connected (%s)' % client._client_id)
         #suscripcion al agente Source
 
-        self.client.subscribe(topic='Pump_prueba/SanRafael', qos=0)
+        self.client.subscribe(topic='PmS/SanRafael/Ag', qos=0)
         self.client.unsubscribe("Ag/#")
 
     def on_message(self,client, userdata, message):
         global Date_R,Fl_Irr,Fl_IrrN,NEW_PRESC,Fl_petp
         data=str(message.payload).split("'")[1].split(":")  #split mensaje con ":"
         topic=str(message.topic).split("/")[0]
-        if topic=="Pump_prueba":
+        if topic=="PmS":
             print('------------------------------')
             print('received: ')
             print('topic: %s' % message.topic)
