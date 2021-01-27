@@ -22,7 +22,6 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
 
-
 #cooeficientes de cultivos
 Crop={"Maize": [25,37,40,30,   0.30,1.2,0.5,   0,0.4572,    5,108,0.55 ],
 "Potato":      [25,30,36,30,   0.5,1.15,0.75,  0,0.3048,     6,100,0.25],
@@ -56,6 +55,7 @@ HOUR_IRRIG=[9,0] #hora de riego
 LOTE="SanRafael"
 
 AGENT=''
+NUM_LOTE=0
 
 Level=0
 Flag_Pet=False
@@ -72,10 +72,10 @@ device=XBeeDevice("/dev/ttyUSB0",9600)
 device.open()
 
 #agent#: ['PAN_ID DE NODO','DIRECCION DE XBEE ACTUADORES']
-Xbees_properties={'Agent_1': [b'\x00\x00\x00\x00\x00\x00\x02\x00','0013A20040BE17CE'], 
-'Agent_2': [b'\x00\x00\x00\x00\x00\x00\x03\x00','0013A20040E8762A'],
+Xbees_properties={'Agent_1': [b'\x00\x00\x00\x00\x00\x00\x10\x00','0013A20040BE17CE'], 
+'Agent_2': [b'\x00\x00\x00\x00\x00\x00\x05\x00','0013A20040E8762A'],
 'Agent_3': [b'\x00\x00\x00\x00\x00\x00\x04\x00','0013A20040E7412C'],
-'Agent_4': [b'\x00\x00\x00\x00\x00\x00\x05\x00','0013A20040DADF27']}
+'Agent_4': [b'\x00\x00\x00\x00\x00\x00\x06\x00','0013A20040DADF27']}
 
 #-------------Firebase--------------
 PAHT_CRED = 'Clave_Firebase.json'
@@ -115,21 +115,25 @@ class FIREBASE_CLASS():
 
 class PumpStation():
     def __init__(self): 
-        global device, AGENT,LOTE, Xbees_properties
+        global device, AGENT,LOTE, Xbees_properties, NUM_LOTE
         print('INGRESE EL NUMERO DEL AGENTE A EJECUTAR [1-4]')
         numero_agente=input()
         while int(numero_agente) <0 or int(numero_agente)>4:
             print('error [1-4]')
             numero_agente=input()
         AGENT='Agent_'+numero_agente
+        NUM_LOTE=int(numero_agente)
         LOTE=LOTE+numero_agente
         print(AGENT)
-        device.set_pan_id(Xbees_properties[AGENT][0])
-        while Xbees_properties[AGENT][0] != device.get_pan_id():
-            device.set_pan_id(Xbees_properties[AGENT][0])
-            time.sleep(0.1)
-        print("id xbee")
+        print("id_pan")
         print(device.get_pan_id())
+        # if str(device.get_pan_id())!= Xbees_properties[AGENT][0]:
+        #     device.set_pan_id(Xbees_properties[AGENT][0])
+        #     while Xbees_properties[AGENT][0] != device.get_pan_id():
+        #         device.set_pan_id(Xbees_properties[AGENT][0])
+        #         time.sleep(0.1)     
+        #print("id xbee")
+        #print(device.get_pan_id())
 
         #self.Init_Menu()
         print(".......")
@@ -177,19 +181,22 @@ class PumpStation():
             print('payload: %s' % message.payload)
             print('qos: %d' % message.qos)
             if data[0]=="Rp":                               #si el mensaje inicia como Rp 
-                Date_R=data[1]              
+                Date_R=data[1].split(';')[0]     
+                today = str(date.today()).split()[0]         
                 print(Date_R)
-                Fl_petp=True                                #se activa bandera de peticcion   
+                if Date_R== today:
+                    Fl_petp=True                                #se activa bandera de peticcion   
             elif data[0]=="Irr":                            #si el mensaje inicia como Irr=Riego    
                 if data[1]=="Cont":                         #si la accion es continuar    
                     Fl_Irr=True                             #activa bandera de reigo por prescripcion local
                 elif data[1].split(";")[0]=="Neg":          #si es Neg
-                    NEW_PRESC=int(data[1].split(";")[1])      #se guarda el dato del nuevo valor de prescipcion 
-                    Fl_IrrN=True                            #se activa bandera de riego por negociacion
+                    if  NUM_LOTE== int(data[1].split(";")[1]):
+                        NEW_PRESC=int(data[1].split(";")[2])      #se guarda el dato del nuevo valor de prescipcion 
+                        Fl_IrrN=True                            #se activa bandera de riego por negociacion
                 pass 
 
     def Init_Menu(self): 
-        global PWP,STAR_DATE,CROP_DEFAULT,FIELD_CAPACITY
+        global PWP,STAR_DATE,CROP_DEFAULT,FIELD_CAPACITY,NUM_LOTE
         try:
             print("TIPO DE CULTIVO :")
             crops={1:"Maize",2:"Potato",3:"Tomato",4:"Barley",5:"Wheat",6:"Quinoa",7:"Onion"}
@@ -226,19 +233,18 @@ class PumpStation():
     #------------------------------------------------------------------------- 
     def Princip_Funcion(self):
         global Date_R,Fl_Irr,Fl_IrrN,New_pr,Fl_petp,Fl_Pres
-        global CROP_DEFAULT,PRESC_MODE,CONT_DAYS,NEW_PRESC,HOUR_IRRIG,LOTE
+        global CROP_DEFAULT,PRESC_MODE,CONT_DAYS,NEW_PRESC,HOUR_IRRIG,LOTE,NUM_LOTE
         global device
         global IRR_SPEED
         print("init")
 
-        while True:
+        while True:     
             today = str(date.today()).split()[0]
             now=datetime.now()
             today = date(now.year,now.month,now.day)
             CONT_DAYS=abs(today-STAR_DATE).days
             CONT_WEEK=int(CONT_DAYS/7)+1
             hour_now=[datetime.now().hour,datetime.now().minute]
-
             if  hour_now==HOUR_PRESC:  
                 if Fl_Pres==False:
                     if PRESC_MODE=='Moisture_Sensors':
@@ -247,62 +253,66 @@ class PumpStation():
                         presc=self.Weather_Station_presc(CONT_DAYS)
                     print(f"""HORA DE PRESCRIPCION: {HOUR_PRESC[0]}:{HOUR_PRESC[1]}
                             PRESCIPCION={presc} mm """)    
-                    Fl_Pres=True
+                    Fl_Pres=True      
+            if  Fl_petp==True:
+                if Fl_Pres==False:
+                    if PRESC_MODE=='Moisture_Sensors':
+                        presc=self.Moisture_Sensor_Presc(CONT_DAYS)
+                    elif PRESC_MODE=='Weather_Station':            
+                        presc=self.Weather_Station_presc(CONT_DAYS)
+                    Fl_Pres=True    
+                else:
+                    pass
+                print(f"IRRIGATION PRECRIPTION= {presc}")
+                date_report=str(datetime.now()).split()[0]
+                hour_report=str(datetime.now()).split()[1]
+                file_SeD= open('Sensors_Data.txt', 'r',errors='ignore')
+                data = file_SeD.read().splitlines()
+                VWC=float(data[-1].split(';')[2])      
+                file_SeD.close
 
-            if(Date_R=="2020-11-03"):
-                if  Fl_petp==True:
-                    if Fl_Pres==False:
-                        if PRESC_MODE=='Moisture_Sensors':
-                            presc=self.Moisture_Sensor_Presc(CONT_DAYS)
-                        elif PRESC_MODE=='Weather_Station':            
-                            presc=self.Weather_Station_presc(CONT_DAYS)
-                        Fl_Pres=True    
+                file_HiD= open('Data/History_Data.txt', 'r',errors='ignore')
+                data = file_HiD.read().splitlines()
+                Kc=float(data[-1].split(';')[5])
+                root_depth=data[-1].split(';')[6]
+                Taw=data[-1].split(';')[7] 
+                Mae=data[-1].split(';')[8]
+                Ks=float(data[-1].split(';')[10])
+                deple=5
+                file_HiD.close()
+                if PRESC_MODE=='Moisture_Sensors':
+                    PRESC_MODE_send='VWC'
+                elif  PRESC_MODE=='Weather_Station':
+                    PRESC_MODE_send='ET0'
+
+                Report_Agent=f"{LOTE};{CROP_DEFAULT}.CRO;{str(STAR_DATE)};{presc};{Kc};{Ks};{CONT_DAYS};{CONT_WEEK};{root_depth};{Taw};{Mae};{PRESC_MODE_send};{VWC};{deple};{date_report};{hour_report}"
+                self.client.publish(f"Ag/SanRafael/Bloque_1/{NUM_LOTE}",f"{Report_Agent}",qos=2) 
+                print('report')
+                Fl_petp=False
+
+            if Fl_Pres==True:
+                
+                hour_now=[datetime.now().hour,datetime.now().minute]
+                #print(str(HOUR_IRRIG))
+                #hour_now=HOUR_IRRIG
+                if hour_now==HOUR_IRRIG:
+                    #print(".")
+                    if Fl_Irr==True:
+                        Irr_time=presc/IRR_SPEED
+                        print("enviar riego: "+str(presc))
+                        self.Send_irr_order(CONT_DAYS,"NO","Data/History_Data.txt",Irr_time)
+                        self.FB.refIrrig_aplied.set(presc)
+                        Fl_Irr=False
+                        Fl_Pres=False
+                    elif Fl_IrrN==True:    
+                        Irr_time=NEW_PRESC/IRR_SPEED
+                        print("enviar riego: "+str(Irr_time))
+                        self.Send_irr_order(CONT_DAYS,"SI","Data/History_Data.txt",Irr_time)
+                        self.FB.refIrrig_aplied.set(NEW_PRESC)
+                        Fl_IrrN=False
+                        Fl_Pres=False
                     else:
                         pass
-                    print(f"IRRIGATION PRECRIPTION= {presc}")
-                    date_report=str(datetime.now()).split()[0]
-                    hour_report=str(datetime.now()).split()[1]
-                    file_SeD= open('Sensors_Data.txt', 'r',errors='ignore')
-                    data = file_SeD.read().splitlines()
-                    VWC=float(data[-1].split(';')[2])      
-                    file_SeD.close
-
-                    file_HiD= open('History_Data.txt', 'r',errors='ignore')
-                    data = file_HiD.read().splitlines()
-                    Kc=float(data[-1].split(';')[5])
-                    root_depth=data[-1].split(';')[6]
-                    Taw=data[-1].split(';')[7] 
-                    Mae=data[-1].split(';')[8]
-                    Ks=float(data[-1].split(';')[10])
-                    file_HiD.close()
-
-                    Report_Agent=f"{LOTE};{CROP_DEFAULT}.CRO;{str(STAR_DATE)};{presc};{Kc};{Ks};{CONT_DAYS};{CONT_WEEK};{root_depth};{Taw};{Mae};{PRESC_MODE};{VWC};{date_report};{hour_report}"
-                    self.client.publish("Ag/SanRafael/Block1",f"Rp:{Report_Agent}",qos=2) 
-                    Fl_petp=False
-
-                if Fl_Pres==True:
-                    
-                    hour_now=[datetime.now().hour,datetime.now().minute]
-                    #print(str(HOUR_IRRIG))
-                    #hour_now=HOUR_IRRIG
-                    if hour_now==HOUR_IRRIG:
-                        print(".")
-                        if Fl_Irr==True:
-                            Irr_time=presc/IRR_SPEED
-                            print("enviar riego: "+str(presc))
-                            self.Send_irr_order(CONT_DAYS,"NO","History_Data.txt",Irr_time)
-                            self.FB.refIrrig_aplied.set(presc)
-                            Fl_Irr=False
-                            Fl_Pres=False
-                        elif Fl_IrrN==True:    
-                            Irr_time=NEW_PRESC/IRR_SPEED
-                            print("enviar riego: "+str(Irr_time))
-                            self.Send_irr_order(CONT_DAYS,"SI","History_Data.txt",Irr_time)
-                            self.FB.refIrrig_aplied.set(NEW_PRESC)
-                            Fl_IrrN=False
-                            Fl_Pres=False
-                        else:
-                            pass
 
                    
     def Send_irr_order(self,day,neg,dir_file,presc):
@@ -311,15 +321,19 @@ class PumpStation():
             print(".....................")
             print("...enviando riego...")
             print('device', device) 
-            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(Xbees_properties[AGENT][1]))
+            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(Xbees_properties[AGENT][1]))     
             device.send_data(remote_device,'SITASK;'+'1;'+str(presc))
-            file_HiD= open(dir_file, 'a',errors='ignore')
-            file_HiD.write(f"{day};{neg};$;")
-            file_HiD.close()
-            
+        
         except:
+            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(Xbees_properties[AGENT][1]))     
+            device.send_data(remote_device,'SITASK;'+'1;'+str(presc))
             print('Troubles in the communication')
-            device.close()
+            #device.close()
+
+                
+        file_HiD= open(dir_file, 'a',errors='ignore')
+        file_HiD.write(f"{day};{neg};$;")
+        file_HiD.close()    
         Fl_Irr=False 
         Fl_petp=False   
         Fl_Pres=False
@@ -370,7 +384,7 @@ class PumpStation():
         today = str(datetime.now()).split()[0]
         hour  = str(datetime.now()).split()[1]
 
-        file_HiD= open('History_Data.txt', 'a',errors='ignore')
+        file_HiD= open('Data/History_Data.txt', 'a',errors='ignore')
         file_HiD.write(f"Moisture_Sensors;{today};{hour};{irr_pres_net};{deficit};{Kc};{sp_rootdepth};{d_TAW};{0};{0};{0};{0};") 
         #las ultimas 4 no aplican para este metodo de prescripcion
         file_HiD.close()
@@ -394,7 +408,7 @@ class PumpStation():
         ETc=EToD*Kc #ETC
 
         if n!=0:
-            file_HiD= open('History_Data.txt', 'r',errors='ignore')
+            file_HiD= open('Data/History_Data.txt', 'r',errors='ignore')
             data = file_HiD.read().splitlines()
             Irr=float(data[-1].split(';')[3]) #toma el riego de el dia anterior
             depl=float(data[-1].split(';')[4])  #toma la deplecion de el dia anterior  cuento ha disminuido 
@@ -436,7 +450,7 @@ class PumpStation():
         today = str(datetime.now()).split()[0]
         hour  = str(datetime.now()).split()[1]
         
-        file_HiD= open('History_Data.txt', 'a',errors='ignore')
+        file_HiD= open('Data/History_Data.txt', 'a',errors='ignore')
         file_HiD.write(f"Moisture_Sensors;{today};{hour};{irr_pres_net};{deficit};{Kc};{sp_rootdepth};{d_TAW};{d_MAD};{Ks};{ETcadj};{eff_rain};{ETc};")
         file_HiD.close()    
 
@@ -527,7 +541,7 @@ class Sens_Data():
             print(message[1])   
             if message[1].split(";")[0]=="COMPLETE":
                 print("END IRRIGATION ")
-                dir_file="History_Data.txt"
+                dir_file="Data/History_Data.txt"
                 valve=str(message[1].split(";")[1])
                 time_apl=str(message[1].split(";")[2])   #time en seconds
                 Sensor_pulses=float(message[1].split(";")[3].replace('\x00',''))
@@ -538,7 +552,7 @@ class Sens_Data():
 
             else:
                 print("IRRIGATION START")
-                dir_file="History_Data.txt"
+                dir_file="Data/History_Data.txt"
                 hour_Irr=[datetime.now().hour,datetime.now().minute]
                 file_HiD= open(dir_file, 'a',errors='ignore')
                 file_HiD.write(f"{hour_Irr[0]}:{hour_Irr[1]};")
