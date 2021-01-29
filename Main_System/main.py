@@ -21,8 +21,16 @@ import math
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
-
-
+#==========================LIB LOGICA DIFUSA ========================
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import numpy as np
+    import skfuzzy.control as ctrl
+    import skfuzzy as fuzz
+except:
+    print("Error importando fuzzy lib")    
+#====================================================================
 
 #cooeficientes de cultivos
 Crop={"Maize": [25,37,40,30,   0.30,1.2,0.5,   0,0.4572,    5,108,0.55 ],
@@ -273,7 +281,8 @@ class PumpStation():
                 Taw=data[-1].split(';')[7] 
                 Mae=data[-1].split(';')[8]
                 Ks=float(data[-1].split(';')[10])
-                deple=5
+                deple=data[-1].split(';')[4
+                ]
                 file_HiD.close()
                 if PRESC_MODE=='Moisture_Sensors':
                     PRESC_MODE_send='VWC'
