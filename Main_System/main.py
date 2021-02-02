@@ -1,35 +1,42 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Oct 15 23:19:10 2020
-@author: sebca
+===============================================================================================================
+========================================SCRIPT  GENERAL MAIN===================================================
+============================SISTEMA CENTRAL DE CONTROL DEL AGENTE REAL EN CAMPO================================
+===============================================================================================================
+DESCRIPCION:Este script realiza la lectura de los datos y el acceso total a las funciones, ademas después de 
+    organizar los datos necesarios para generar el  controldelagentereal, y ademas almacena los datosen la base 
+    de datos de google fitebase.
 """
+#===========IMPORTACIONB DE LIBRERIEAS 
 import sys
 import paho.mqtt.client
 from pathlib import Path
 import os
+#====LIBRERIAS PARA ACCESO AL TIEMPO 
 import time
 import datetime
-import signal
-from threading import Thread
-from datetime import datetime,timedelta
 from datetime import date
 from datetime import time as tm
+from datetime import datetime,timedelta
+import signal
+#====LIBRERIA PARAGENERAE HILOS EN EL PROHRAMA===
+from threading import Thread
 import random
+#====== LIBRERIAS PARAELMANEGO DE DISPOSITIVO DE TRANSMISION XBEE
 from digi.xbee.devices import XBeeDevice, RemoteXBeeDevice,XBee64BitAddress,OperatingMode,RemoteATCommandPacket
 import math
-#firebase
-import firebase_admin
-from firebase_admin import credentials
-from firebase_admin import db
+#=======LIBRERIAS DELSDK PARA EL ACCESO A LOS DATOS DE firebase DESDE EL MODULO ADMINISTRADOR
+import firebase_admin 
+from firebase_admin import credentials #ACCESO A LAS LLAVES PRIVADAS DEL MODULO DE ADMIN O DATOS DE ALMACVENAMIENTO
+from firebase_admin import db  #ACCESO A LA BASE DE DATOS
+from firebase_admin import firestore  #ACCESO A LA BASE DE DATOS
 #==========================LIB LOGICA DIFUSA ========================
-try:
-    import matplotlib
-    matplotlib.use('Agg')
-    import numpy as np
-    import skfuzzy.control as ctrl
-    import skfuzzy as fuzz
-except:
-    print("Error importando fuzzy lib")    
+import matplotlib
+matplotlib.use('Agg')
+import numpy as np
+import skfuzzy.control as ctrl
+import skfuzzy as fuzz
 #====================================================================
 
 #cooeficientes de cultivos
@@ -56,7 +63,7 @@ Sens_Lev={
 PWP=25
 FIELD_CAPACITY=70
 CROP_DEFAULT='Onion'
-PRESC_MODE='Moisture_Sensors'
+PRESC_MODE='Fuzzy_System'
 STAR_DATE=date(2020,12,1)
 CONT_DAYS=0
 HOUR_PRESC=[0,0]
@@ -67,7 +74,7 @@ LOTE="SanRafael"
 AGENT=''
 NUM_LOTE=0
 
-Path_Data="/home/pi/Desktop/Agent_N1/Data"
+Path_Data="/home/pi/Desktop/Real_Agents_N1/Data"
 
 Level=0
 Flag_Pet=False
@@ -84,10 +91,10 @@ device=XBeeDevice("/dev/ttyUSB0",9600)
 device.open()
 
 #agent#: ['PAN_ID DE NODO','DIRECCION DE XBEE ACTUADORES']
-Xbees_properties={'Agent_1': [b'\x00\x00\x00\x00\x00\x00\x10\x00','0013A20040BE17CE'], 
-'Agent_2': [b'\x00\x00\x00\x00\x00\x00\x05\x00','0013A20040E8762A'],
-'Agent_3': [b'\x00\x00\x00\x00\x00\x00\x04\x00','0013A20040E7412C'],
-'Agent_4': [b'\x00\x00\x00\x00\x00\x00\x06\x00','0013A20040DADF27']}
+Xbees_properties={'Agent_1': ['0013A20040BE17CE'], 
+'Agent_2': ['0013A20040E8762A'],
+'Agent_3': ['0013A20040E7412C'],
+'Agent_4': ['0013A20040DADF27']}
 
 #-------------Firebase--------------
 PAHT_CRED = 'Clave_Firebase.json'
@@ -100,7 +107,8 @@ class FIREBASE_CLASS():
         cred=credentials.Certificate(PAHT_CRED)
         firebase_admin.initialize_app(cred,{
             'databaseURL':URL_DB
-        })      
+        })   
+        #self.val1 =firestore.client().collection('agentes').document('Agente1').set({"array":[1,2,3,4,5],"datyos":135.576})
         self.refAgents=db.reference('Agent')
         self.refAgent=self.refAgents.child(AGENT)
         self.refCrop=self.refAgent.child('Crop')
@@ -140,6 +148,7 @@ class PumpStation():
         print("id_pan")
         print(device.get_pan_id())
         print(".......")
+        #self.Init_Menu()
         
         self.client =paho.mqtt.client.Client(client_id='Real_'+AGENT, clean_session=False)
         self.client.on_connect = self.on_connect
@@ -219,7 +228,7 @@ class PumpStation():
             STAR_DATE=date(int(year),int(month),int(day))
             print("DAY START CROP: "+ str(STAR_DATE))
             print("MODO DE PRESCRIPCION")
-            prespc={1:"Moisture_Sensors",2:"Weather_Station"}
+            prespc={1:"Moisture_Sensors",2:"Weather_Station",3:"Fuzzy_System"}
             for i in range(len(prespc)):
                 print(str(i+1)+". "+str(prespc[i+1]))
             print("INGRESE MODO DE PRESCRIPCION: ", end="")
@@ -254,6 +263,13 @@ class PumpStation():
                         presc=self.Moisture_Sensor_Presc(CONT_DAYS)
                     elif PRESC_MODE=='Weather_Station':            
                         presc=self.Weather_Station_presc(CONT_DAYS)
+                    elif PRESC_MODE=='Fuzzy_System':
+                        file_SeD= open(Path_Data+'/Sensors_Data.txt', 'r',errors='ignore')
+                        data = file_SeD.read().splitlines()
+                        VWC=float(data[-1].split(';')[2])      
+                        file_SeD.close
+                        presc=self.Fuzzy_Metod_Presc(VWC,25,35)
+                        
                     print(f"""HORA DE PRESCRIPCION: {HOUR_PRESC[0]}:{HOUR_PRESC[1]}
                             PRESCIPCION={presc} mm """)    
                     Fl_Pres=True      
@@ -263,6 +279,13 @@ class PumpStation():
                         presc=self.Moisture_Sensor_Presc(CONT_DAYS)
                     elif PRESC_MODE=='Weather_Station':            
                         presc=self.Weather_Station_presc(CONT_DAYS)
+                    elif PRESC_MODE=='Fuzzy_System':
+                        file_SeD= open(Path_Data+'/Sensors_Data.txt', 'r',errors='ignore')
+                        data = file_SeD.read().splitlines()
+                        VWC=float(data[-1].split(';')[2])      
+                        file_SeD.close
+                        print(f'vwc: {VWC}')
+                        presc=self.Fuzzy_Metod_Presc(VWC,25,35)    
                     Fl_Pres=True    
                 else:
                     pass
@@ -281,8 +304,7 @@ class PumpStation():
                 Taw=data[-1].split(';')[7] 
                 Mae=data[-1].split(';')[8]
                 Ks=float(data[-1].split(';')[10])
-                deple=data[-1].split(';')[4
-                ]
+                deple=data[-1].split(';')[4]
                 file_HiD.close()
                 if PRESC_MODE=='Moisture_Sensors':
                     PRESC_MODE_send='VWC'
@@ -325,11 +347,11 @@ class PumpStation():
             print(".....................")
             print("...enviando riego...")
             print('device', device) 
-            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(Xbees_properties[AGENT][1]))     
+            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(Xbees_properties[AGENT][0]))     
             device.send_data(remote_device,'SITASK;'+'1;'+str(presc))
         
         except:
-            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(Xbees_properties[AGENT][1]))     
+            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(Xbees_properties[AGENT][0]))     
             device.send_data(remote_device,'SITASK;'+'1;'+str(presc))
             print('Troubles in the communication')
             #device.close()
@@ -341,8 +363,6 @@ class PumpStation():
         Fl_Irr=False 
         Fl_petp=False   
         Fl_Pres=False
-
-
 
     def Moisture_Sensor_Presc(self,n):
         global PWP,CROP_DEFAULT,Sens_Lev,FIELD_CAPACITY  
@@ -393,7 +413,6 @@ class PumpStation():
         #las ultimas 4 no aplican para este metodo de prescripcion
         file_HiD.close()
         return irr_pres_net
-
 
     def Weather_Station_presc(self,n):
 
@@ -460,6 +479,71 @@ class PumpStation():
 
         return irr_pres_net
 
+    def Fuzzy_Metod_Presc(self,Moisture_A,Temperature_A,Radiation_A):
+        Moisture = ctrl.Antecedent(np.arange(0, 52.56, 1), 'Moisture')  #  (np.arange(0, 60, 1), 'Moisture')
+        Temperature = ctrl.Antecedent(np.arange(0, 25, 1), 'Temperature')
+        Radiation = ctrl.Antecedent(np.arange(0, 3500, 1), 'Radiation')
+        IrrTime = ctrl.Consequent(np.arange(0, 32, 1), 'IrrTime')
+
+        Moisture['LowM'] = fuzz.trapmf(Moisture.universe, [-20, -20, 15.0, 30.0])   # [-20, -20, 15.92, 36.60])
+        Moisture['MediumM'] = fuzz.trimf(Moisture.universe, [15, 30, 45])    # [15.92, 36.60, 52.56])
+        Moisture['HighM'] = fuzz.trapmf(Moisture.universe, [30, 45, 65, 65])    # [36.60, 52.56, 65, 65])
+
+        Temperature['LowT'] = fuzz.trapmf(Temperature.universe, [- 2, -2, 10, 15])
+        Temperature['MediumT'] = fuzz.trimf(Temperature.universe, [10, 15, 20])
+        Temperature['HighT'] = fuzz.trapmf(Temperature.universe, [15, 20, 25, 25])
+
+        Radiation['LowR'] = fuzz.trapmf(Radiation.universe, [-10, -10, 10, 200])
+        Radiation['MediumR'] = fuzz.trapmf(Radiation.universe, [10, 200, 1000, 1400])
+        Radiation['HighR'] = fuzz.trapmf(Radiation.universe, [1000, 1400, 3550, 3550])
+
+        IrrTime['Nothing'] = fuzz.trapmf(IrrTime.universe, [-20, -20, 0, 8])
+        IrrTime['VeryLittle'] = fuzz.trimf(IrrTime.universe, [0, 8, 16])
+        IrrTime['Little'] = fuzz.trimf(IrrTime.universe, [8, 16, 24])
+        IrrTime['Long'] = fuzz.trimf(IrrTime.universe, [16, 24, 32])
+        IrrTime['VeryLong'] = fuzz.trapmf(IrrTime.universe, [24, 32, 40, 40])
+
+        rule1 = ctrl.Rule(Moisture['LowM'] & Temperature['LowT'] & Radiation['LowR'], IrrTime['VeryLong'])
+        rule2 = ctrl.Rule(Moisture['LowM'] & Temperature['LowT'] & Radiation['MediumR'], IrrTime['VeryLong'])
+        rule3 = ctrl.Rule(Moisture['LowM'] & Temperature['LowT'] & Radiation['HighR'], IrrTime['VeryLong'])
+        rule4 = ctrl.Rule(Moisture['LowM'] & Temperature['MediumT'] & Radiation['LowR'], IrrTime['Long'])
+        rule5 = ctrl.Rule(Moisture['LowM'] & Temperature['MediumT'] & Radiation['MediumR'], IrrTime['Long'])
+        rule6 = ctrl.Rule(Moisture['LowM'] & Temperature['MediumT'] & Radiation['HighR'], IrrTime['Little'])
+        rule7 = ctrl.Rule(Moisture['LowM'] & Temperature['HighT'] & Radiation['LowR'], IrrTime['VeryLong'])
+        rule8 = ctrl.Rule(Moisture['LowM'] & Temperature['HighT'] & Radiation['MediumR'], IrrTime['VeryLittle'])
+        rule9 = ctrl.Rule(Moisture['LowM'] & Temperature['HighT'] & Radiation['HighR'], IrrTime['Nothing'])
+        rule10 = ctrl.Rule(Moisture['MediumM'] & Temperature['LowT'] & Radiation['LowR'], IrrTime['Little'])
+        rule11 = ctrl.Rule(Moisture['MediumM'] & Temperature['LowT'] & Radiation['MediumR'], IrrTime['Little'])
+        rule12 = ctrl.Rule(Moisture['MediumM'] & Temperature['LowT'] & Radiation['HighR'], IrrTime['Little'])
+        rule13 = ctrl.Rule(Moisture['MediumM'] & Temperature['MediumT'] & Radiation['LowR'], IrrTime['Little'])
+        rule14 = ctrl.Rule(Moisture['MediumM'] & Temperature['MediumT'] & Radiation['MediumR'], IrrTime['Little'])
+        rule15 = ctrl.Rule(Moisture['MediumM'] & Temperature['MediumT'] & Radiation['HighR'], IrrTime['VeryLittle'])
+        rule16 = ctrl.Rule(Moisture['MediumM'] & Temperature['HighT'] & Radiation['LowR'], IrrTime['Long'])
+        rule17 = ctrl.Rule(Moisture['MediumM'] & Temperature['HighT'] & Radiation['MediumR'], IrrTime['VeryLittle'])
+        rule18 = ctrl.Rule(Moisture['MediumM'] & Temperature['HighT'] & Radiation['HighR'], IrrTime['Nothing'])
+        rule19 = ctrl.Rule(Moisture['HighM'] & Temperature['LowT'] & Radiation['LowR'], IrrTime['Nothing'])
+        rule20 = ctrl.Rule(Moisture['HighM'] & Temperature['LowT'] & Radiation['MediumR'], IrrTime['Nothing'])
+        rule21 = ctrl.Rule(Moisture['HighM'] & Temperature['LowT'] & Radiation['HighR'], IrrTime['Nothing'])
+        rule22 = ctrl.Rule(Moisture['HighM'] & Temperature['MediumT'] & Radiation['LowR'], IrrTime['Nothing'])
+        rule23 = ctrl.Rule(Moisture['HighM'] & Temperature['MediumT'] & Radiation['MediumR'], IrrTime['Nothing'])
+        rule24 = ctrl.Rule(Moisture['HighM'] & Temperature['MediumT'] & Radiation['HighR'], IrrTime['Nothing'])
+        rule25 = ctrl.Rule(Moisture['HighM'] & Temperature['HighT'] & Radiation['LowR'], IrrTime['Nothing'])
+        rule26 = ctrl.Rule(Moisture['HighM'] & Temperature['HighT'] & Radiation['MediumR'], IrrTime['Nothing'])
+        rule27 = ctrl.Rule(Moisture['HighM'] & Temperature['HighT'] & Radiation['HighR'], IrrTime['Nothing'])
+
+        IrrTimeping_ctrl = ctrl.ControlSystem([rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13, rule14, rule15, rule16, rule17, rule18, rule19, rule20, rule21, rule22, rule23, rule24, rule25, rule26, rule27])
+        IrrTimeping = ctrl.ControlSystemSimulation(IrrTimeping_ctrl)
+        #
+        #
+        ## Pass inputs to the ControlSystem using Antecedent labels with Pythonic API
+        ## Note: if you like passing many inputs all at once, use .inputs(dict_of_data)
+        IrrTimeping.input['Moisture'] = Moisture_A
+        IrrTimeping.input['Temperature'] = Temperature_A
+        IrrTimeping.input['Radiation'] = Radiation_A
+
+        IrrTimeping.compute()
+        print (IrrTimeping.output['IrrTime'])
+        return IrrTimeping.output['IrrTime']
 
 
     #fucnion para determinar el coeficionete de cultivo dependiendo del dia 
