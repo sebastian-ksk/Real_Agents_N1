@@ -41,6 +41,9 @@ class Main():
             print(f'bandera {self.Mqtt.FlagAuth}' )
             if  self.Mqtt.FlagAuth:
                 print('hola')
+                if self.xbeeComm.sendIrrigationOrder('s','s','25'):
+                    print('mensaje enviado')
+
             else:
                 print('not hola')
             timedelay.sleep(20)
