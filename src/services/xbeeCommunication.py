@@ -1,7 +1,7 @@
 
 import sys
 from digi.xbee.devices import XBeeDevice, RemoteXBeeDevice,XBee64BitAddress,OperatingMode,RemoteATCommandPacket
-
+from datetime import datetime, date, time, timedelta #para fechas y hora
 
 # "/dev/ttyUSB0"
 
@@ -33,10 +33,10 @@ class XbeeCommunication():
         print(str(datetime.now()).split()[1])
         print(str(xbee_message.data.decode()))
 
-    def sendIrrigationOrder(sel,message,Agent):
+    def sendIrrigationOrder(self,message,Agent,presc):
         try:
-            remote_device=RemoteXBeeDevice(device,XBee64BitAddress.from_hex_string(self.xbees_properties[Agent][0]))     
-            device.send_data(remote_device,'SITASK;'+'1;'+str(presc))    
+            self.remote_device=RemoteXBeeDevice(self.device,XBee64BitAddress.from_hex_string('0013A20040E8761A'))     
+            self.device.send_data(self.remote_device,'SITASK;'+'1;'+str(presc))    
             return True
         except:
             return False
