@@ -6,11 +6,14 @@ from datetime import datetime, date, time, timedelta #para fechas y hora
 # "/dev/ttyUSB0"
 
 class XbeeCommunication():
-    xbees_properties={'Agent_1': ['0013A20040BE17CE'], 
+    Path_Data=""
+    xbees_properties={'Agent_1': ['0013A20041573102'], 
     'Agent_2': ['0013A20040E8762A'],
     'Agent_3': ['0013A20040E7412C'],
     'Agent_4': ['0013A20040DADF27']}
-    def __init__(self, UsbDirection, baudRate):
+    def __init__(self, UsbDirection, baudRate,sensors):
+        self.sensors = sensors
+        self.Path_Data = '/home/pi/Desktop/Real_Agents_N1/src/storage'
         self.device=XBeeDevice(UsbDirection,baudRate)
         self.device.open()
         # self.subproces_Sens=Thread(target=self.xbeeComm.runCallback)
@@ -27,15 +30,33 @@ class XbeeCommunication():
                 device.close()  
 
     def data_receive_callback(self, xbee_message):
-        source=xbee_message.remote_device.get_64bit_addr()
-        source1=str(source)  
-        message=str(xbee_message.data.decode())
+        self.message=str(xbee_message.data.decode()).split(':')
         print(str(datetime.now()).split()[1])
         print(str(xbee_message.data.decode()))
+        if self.message[0] == 'IRRIG':
+            if self.message[1].split(";")[0]=="COMPLETE":
+                print('End Irrigation')
+                self.save_data_Xbee(f"{self.Path_Data}/Irrigation_finished.txt",self.message[1])
+            else:
+                print('Irrigation Start')
+                self.save_data_Xbee(f"{self.Path_Data}/Irrigation_started.txt",self.message[1])
+        elif self.message[0]=="SENSORS":
+            print('sensores')
+            self.save_data_Xbee(f"{self.Path_Data}/Sensor_data.txt",self.message[1])
+            self.sensors.allSensors = [float(x) for x in self.message[1].split(';')]
+
+
+    def save_data_Xbee(self,directory,message):
+        self.dir_file = directory
+        self.SaveFile = open(self.dir_file, 'a',errors='ignore')
+        self.SaveFile.write(f'{str(datetime.now()).split()[0]};{str(datetime.now()).split()[1]};{message};\n')
+        self.SaveFile.close()
+
+
 
     def sendIrrigationOrder(self,message,Agent,presc):
         try:
-            self.remote_device=RemoteXBeeDevice(self.device,XBee64BitAddress.from_hex_string('0013A20040E8761A'))     
+            self.remote_device=RemoteXBeeDevice(self.device,XBee64BitAddress.from_hex_string('0013A20041573102'))     
             self.device.send_data(self.remote_device,'SITASK;'+'1;'+str(presc))    
             return True
         except:

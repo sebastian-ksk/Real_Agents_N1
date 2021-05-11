@@ -12,7 +12,7 @@ class Sensors:
         "Wheat":   [0.25,0.50,0.75,1.00,1.30],
         "Quinoa":  [0.23,0.47,0.69,0.92,1.00],
         "Onion":   [0.10,0.20,0.20,0.20,0.20]} 
-        self.__SesorsLevels=self._Sens_Lev[crop]
+        self._SensorsLevels=self._Sens_Lev[crop]
         self._SensorVwc_1=0
         self._SensorVwc_2=0
         self._SensorVwc_3=0
