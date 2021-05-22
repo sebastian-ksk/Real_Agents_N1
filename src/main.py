@@ -1,4 +1,5 @@
 from data.ApiServiceEstacionMet import ApiServiceEstacionMet 
+from data.FireBase import FIREBASE_CLASS
 from model.ModelVarMeTereologica import meteorologicalData as DatMet
 from model.ModelCultivo import Crop
 from model.ModelSensores import Sensors
@@ -10,6 +11,9 @@ from services.PrescriptionMethods import prescriptionMethods
 '''
 librerias externas al sistema 
 '''
+
+from apscheduler.schedulers.background import BackgroundScheduler  #para programar tareas
+
 from datetime import datetime, date, time, timedelta #para fechas y hora
 import time as timedelay #para cronometrar tiempo
 from threading import Thread
@@ -28,6 +32,8 @@ class Main():
         super(Main,self).__init__()
         '''inicializacion de datos'''
         print('init data')
+        
+
         self.startDate=date(2020,12,1)
         self.contDays=0
         self.hourPrescription=[0,0]
@@ -37,25 +43,29 @@ class Main():
         self.num_GroundDivision=0
         self.prescriptionMode = 'Moisture_Sensor'
         self.FlagPrescriptionDone = False
+
+        #estacion meteorlogica
+        self.apiServiceMet = ApiServiceEstacionMet(DatMet)
+
+        self.schedWeatherSatation = BackgroundScheduler()
+        self.schedWeatherSatation.add_job(self.apiServiceMet.checkStation, 'cron',  hour = 0, minute = 0)
+        self.schedWeatherSatation.start()
         self.cropModel = Crop("Maize",20,80,"Moisture_Sensor",
-            11,date(2021,5,1),[9,0],[0,0])
+            11,date(2021,5,1),'00:00',"00:00")
+
+        print('-- firebase -- ')
+        self.FB=FIREBASE_CLASS('Sanrafael_2',self.cropModel)
         
-        
+
         self.sensors = Sensors('Potato','0x1111111111')
         print(self.sensors._SensorsLevels)
         self.prescriptionResult = PrescriptionResults('--',str(datetime.now()).split()[0],str(datetime.now()).split()[1],0,0,0,0,0,0,0,0,0,0) #resultados de prescripcion
         self.presc_Meth =  prescriptionMethods(self.cropModel,self.sensors,self.prescriptionResult) #inicializacion de etodos de prescripcion
         print(self.presc_Meth.crop._crop)
-       
         self.presc_Meth.Moisture_Sensor_Presc()
-
         print(f'funciona  : {self.presc_Meth.prescriptionResult.allDataPrescription}')
-
         '''============================ '''
 
-        self.ApiService = ApiServiceEstacionMet()
-        self.response = self.ApiService.request_station()
-        #datmet = DatMet.from_dict(response)
         self.Mqtt = MqttComunication(1)
         self.xbeeComm=XbeeCommunication("/dev/ttyUSB0",9600,self.sensors)
         self.subproces_Sens=Thread(target=self.xbeeComm.runCallback)
@@ -63,12 +73,13 @@ class Main():
         self.subproces_Sens.start()
         #print(sensor.allSensors)
 
+   
     def realAgentRun(self):
         while True:  
             
-            print(self.xbeeComm.sensors.allSensors)
-            print(self.sensors.allSensors)
-            print(self.presc_Meth.sensors.allSensors)
+            # print(self.xbeeComm.sensors.allSensors)
+            # print(self.sensors.allSensors)
+            # print(self.presc_Meth.sensors.allSensors)
             self.today = date(datetime.now().year,datetime.now().month,datetime.now().day)
             self.contDays = abs(self.today-self.startDate).days
             self.contWeeks = int(self.contDays/7)+1

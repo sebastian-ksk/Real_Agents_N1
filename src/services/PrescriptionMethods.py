@@ -1,8 +1,10 @@
 from datetime import datetime
+import math 
 
 class prescriptionMethods():
     def __init__(self,crop,sensors,prescriptionResult):
         self.pathStorage = '/home/pi/Desktop/Real_Agents_N1/src/storage/Prescription_History.txt'
+        self.directoryWeatherStation = '/home/pi/Desktop/Real_Agents_N1/src/storage/WheatherStationData.txt'
         self.crop = crop
         self.sensors = sensors
         self.prescriptionResult = prescriptionResult
@@ -13,7 +15,7 @@ class prescriptionMethods():
             for self.i in range(len(cropCoefficients)):
                 for self.j in range (7):
                     if day+1==self.temp:
-                        self.Kc=cropCoefficients[i]
+                        self.Kc=cropCoefficients[self.i]
                     self.temp=+1 
         else:          
             self.d_1,self.d_2,self.d_3,self.d_4=cropCoefficients[0],cropCoefficients[1],cropCoefficients[2],cropCoefficients[3]
@@ -28,7 +30,7 @@ class prescriptionMethods():
                 self.Kc=self.Kc_mid
             elif day> (self.d_1+self.d_2+self.d_3) and day<= (self.d_1+self.d_2+self.d_3+self.d_4):
                 self.m=(self.Kc_end-self.Kc_mid)/self.d_4
-                self.Kc=m*(day-(self.d_1+self.d_1+self.d_3))+self.Kc_mid
+                self.Kc=self.m*(day-(self.d_1+self.d_1+self.d_3))+self.Kc_mid
         return self.Kc 
 
     def rootDepth(self,days,cropCoefficients):
@@ -89,62 +91,57 @@ class prescriptionMethods():
         self.pwp=self.crop._pwp #punto de marchitez  
         self.fieldCapacity = self.crop._fieldCapacity 
         self.Kc=self.f_cropcoeff(self.crop.dayscrop,self.crop._crop ,self.crop._CropCoefient)
-        self.sp_rootdepth,self.sp_mae=self.rootDepth(self.crop.dayscrop,self.crop._CropCoefient ) 
-        
-        file_met= open('Req_data_met.self.txt', 'r',errors='ignore')
-        data = file_met.read().splitlines()
-        EToD=float(data[-1].split(";")[2])
-        RainD=float(data[-1].split(";")[3])
-        TeMax=float(data[-1].split(";")[4])
-        TeMin=float(data[-1].split(";")[5])
-        file_met.close
-        ETc=EToD*Kc #ETC
-
+        self.sp_rootdepth,self.sp_mae=self.rootDepth(self.crop.dayscrop,self.crop._CropCoefient )
+        self.file_met= open(self.directoryWeatherStation, 'r',errors='ignore')
+        self.file_met.close
+        self.data = self.file_met.read().splitlines()
+        self.EToD, self.RainD,self.TeMax,self.TeMin=float(self.data[-1].split(";")[2]),float(self.data[-1].split(";")[3]),
+        float(self.data[-1].split(";")[4]),float(self.data[-1].split(";")[2])
+        self.ETc=self.EToD*self.Kc #self.ETc
         if n!=0:
-            file_HiD= open(Path_Data+"/History_Data.self.txt", 'r',errors='ignore')
-            data = file_HiD.read().splitlines()
-            Irr=float(data[-1].split(';')[3]) #toma el riego de el dia anterior
-            depl=float(data[-1].split(';')[4])  #toma la deplecion de el dia anterior  cuento ha disminuido 
-            file_HiD.close
+            self.file_HiD= open(self.pathStorage, 'r',errors='ignore')
+            self.data = self.file_HiD.read().splitlines()
+            self.file_HiD.close
+            self.Irrigation=float(self.data[-1].split(';')[3]) #toma el riego de el dia anterior
+            self.depletion=float(self.data[-1].split(';')[4])  #toma la self.depletionecion de el dia anterior  cuento ha disminuido 
+            
         else:
-            Irr=0		
-            depl=0
+            self.Irrigation=0		
+            self.depletion=0
 
-        if RainD!=0:
-            ET_rain=ET/rainD #lluvia efectiva
-            k=1.011*math.exp(-0.001143*ET_rain)-1.011*math.exp(-0.5208*ET_rain)
+        if self.RainD!=0:
+            self.ET_Rain=self.ET/self.RainD #lluvia efectiva
+            self.k=1.011*math.exp(-0.001143*self.ET_Rain)-1.011*math.exp(-0.5208*self.ET_Rain)
         else:
-            k=0.0  
-        eff_
-        rain=RainD*k
-                                                       
+            self.k=0.0  
+
+        self.effectiveRain=self.RainD*self.k
+                                                        
         self.dTaw=((self.fieldCapacity -self.pwp)/100)*self.sp_rootdepth*1000  #conversion a metros
-        d_self.mad=self.dTaw*self.sp_mae  #coeficiente 
-        ETcadj=Ks*ETc  #etc ajustado	
+        self.mad=self.dTaw*self.sp_mae  #coeficiente 
+        self.ETcadj=self.Ks*self.ETc  #self.ETc ajustado	
 
-        if  Irr + eff_rain > depl+ETc:            
-           self.deficit = 0.0
+        if  self.Irrigation + self.effectiveRain > self.depletion+self.ETc:            
+            self.deficit = 0.0
         else:
-           self.deficit = (depl - Irr - eff_rain + ETc)
+            self.deficit = (self.depletion - self.Irrigation - self.effectiveRain + self.ETc)
         if self.deficit<0:
-           self.deficit=0.0
+            self.deficit=0.0
         else:
             pass    
-        if self.deficit>= d_self.mad:
-            irr_pres_net = depl - Irr - eff_rain + ETc # (mm)             
+        if self.deficit>= self.mad:
+            self.Irrigation_pres_net = self.depletion - self.Irrigation - self.effectiveRain + self.ETc # (mm)             
         else:
-            irr_pres_net=0.0
-        if n>=130 and crop=='Onion' : #se deja de regar 20 dias antes 
-            irr_pres_net=0.0    
-        
-        depl=deficit
-        ks= (self.dTaw-depl)/(self.dTaw*(1-self.sp_mae))
+            self.Irrigation_pres_net=0.0
 
+        if self.crop.dayscrop >=130 and self.crop._crop=='Onion':
+            self.irr_pres_net=0.0   
+        
+        self.depletion=self.deficit
+        self.ks= (self.dTaw-self.depletion)/(self.dTaw*(1-self.sp_mae))
         today = str(datetime.now()).split()[0]
         hour  = str(datetime.now()).split()[1]
-        
-        file_HiD= open(Path_Data+"/History_Data.self.txt", 'a',errors='ignore')
-        file_HiD.write(f"Moisture_Sensors;{today};{hour};{irr_pres_net};{deficit};{Kc};{self.sp_rootdepth};{self.dTaw};{d_self.mad};{Ks};{ETcadj};{eff_rain};{ETc};")
-        file_HiD.close()    
-        return irr_pres_net
-
+        self.prescriptionResult.allDataPrescription = ['Moisture_Sensors',today,hour,self.irr_pres_net,self.deficit,
+        self.Kc,self.sp_rootdepth,self.dTaw,self.mad,self.Ks,self.ETcadj,self.effectiveRain,self.Etc]
+        self.saveDataPrescription(self.pathStorage,self.prescriptionResult.allDataPrescription) 
+        return self.Irrigation_pres_net

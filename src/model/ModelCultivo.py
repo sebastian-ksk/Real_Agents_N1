@@ -19,8 +19,8 @@ class Crop():
         self._CropCoefient=self._Cropcoef[crop]
         self.__prescMode=prescMode
         self.__prescription=prescription
-        self.IrrigHour=IrrigHour
-        self.PrescriptionHour=PrescriptionHour
+        self.__IrrigHour=IrrigHour
+        self.__PrescriptionHour=PrescriptionHour
         self._pwp = pwp
         self._fieldCapacity=fieldCapacity
 
@@ -33,7 +33,6 @@ class Crop():
     @dayscrop.setter
     def dayscrop(self,daysCrop):
         self.__daysCrop = daysCrop
-    
 
     @property
     def prescMode(self):
@@ -50,5 +49,22 @@ class Crop():
     @prescription.setter
     def prescription(self,prescription):
         self.__prescription = prescription
+
+    @property
+    def prescriptiontime(self):
+        return self.__PrescriptionHour
+
+    @prescriptiontime.setter
+    def prescription(self,prescriptionHour):
+        self.__prescriptionHour = prescriptionHour
+
+    @property
+    def irrigationtime(self):
+        return self.__IrrigHour
+
+    @irrigationtime.setter
+    def prescription(self,IrrigHour):
+        self.__IrrigHour = IrrigHour        
+    
 
 
