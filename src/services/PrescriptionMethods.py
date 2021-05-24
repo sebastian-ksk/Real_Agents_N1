@@ -54,9 +54,9 @@ class prescriptionMethods():
 
     def Moisture_Sensor_Presc(self):
         self.Levels = self.sensors._SensorsLevels
-        self.pwp=self.crop._pwp #punto de marchitez  
-        self.fieldCapacity = self.crop._fieldCapacity 
-        self.Kc=self.f_cropcoeff(self.crop.dayscrop,self.crop._crop ,self.crop._CropCoefient)
+        self.pwp=self.crop.pointWp #punto de marchitez  
+        self.fieldCapacity = self.crop.FieldCap
+        self.Kc=self.f_cropcoeff(self.crop.dayscrop,self.crop.typeCrop ,self.crop._CropCoefient)
         self.sp_rootdepth,self.sp_mae=self.rootDepth(self.crop.dayscrop,self.crop._CropCoefient ) 
         self.L1,self.L2,self.L3,self.L4=self.Levels[0],self.Levels[1],self.Levels[1],self.Levels[1] 
         self.WC1,self.WC2,self.WC3,self.WC4=self.sensors.allSensors[0:4]
@@ -76,29 +76,28 @@ class prescriptionMethods():
             self.irr_pres_net =self.deficit # (mm)
         else:
             self.irr_pres_net =0.0
-        if self.crop.dayscrop >=130 and self.crop._crop=='Onion':
+        if self.crop.dayscrop >=130 and self.crop.typeCrop=='Onion':
             self.irr_pres_net=0.0
        
         today = str(datetime.now()).split()[0]
         hour  = str(datetime.now()).split()[1]
-        self.prescriptionResult.allDataPrescription = ['Moisture_Sensor_Presc',today,hour,self.irr_pres_net,self.deficit,self.Kc,self.sp_rootdepth,self.dTaw,0,0,0,0,0]
-        
+        self.prescriptionResult.allDataPrescription = ['VWC-Moisture_Sensor_Presc',today,hour,self.irr_pres_net,self.deficit,self.Kc,self.sp_rootdepth,self.dTaw,0,0,0,0,0]
         self.saveDataPrescription(self.pathStorage,self.prescriptionResult.allDataPrescription)
 
         return self.irr_pres_net
 
-    def Weather_Station_presc(self,n):  
-        self.pwp=self.crop._pwp #punto de marchitez  
-        self.fieldCapacity = self.crop._fieldCapacity 
-        self.Kc=self.f_cropcoeff(self.crop.dayscrop,self.crop._crop ,self.crop._CropCoefient)
+    def Weather_Station_presc(self,daysCrop):  
+        self.pwp=self.crop.pointWp #punto de marchitez  
+        self.fieldCapacity = self.crop.FieldCap
+        self.Kc=self.f_cropcoeff(self.crop.dayscrop,self.crop.typeCrop ,self.crop._CropCoefient)
         self.sp_rootdepth,self.sp_mae=self.rootDepth(self.crop.dayscrop,self.crop._CropCoefient )
         self.file_met= open(self.directoryWeatherStation, 'r',errors='ignore')
         self.file_met.close
         self.data = self.file_met.read().splitlines()
-        self.EToD, self.RainD,self.TeMax,self.TeMin=float(self.data[-1].split(";")[2]),float(self.data[-1].split(";")[3]),
-        float(self.data[-1].split(";")[4]),float(self.data[-1].split(";")[2])
+        self.EToD, self.RainD  = float(self.data[-1].split(";")[2]),float(self.data[-1].split(";")[3])
+        self.TeMax ,self.TeMin = float(self.data[-1].split(";")[4]),float(self.data[-1].split(";")[2])
         self.ETc=self.EToD*self.Kc #self.ETc
-        if n!=0:
+        if daysCrop != 0:
             self.file_HiD= open(self.pathStorage, 'r',errors='ignore')
             self.data = self.file_HiD.read().splitlines()
             self.file_HiD.close
@@ -119,6 +118,7 @@ class prescriptionMethods():
                                                         
         self.dTaw=((self.fieldCapacity -self.pwp)/100)*self.sp_rootdepth*1000  #conversion a metros
         self.mad=self.dTaw*self.sp_mae  #coeficiente 
+        self.Ks= (self.dTaw-self.depletion)/(self.dTaw*(1-self.sp_mae))
         self.ETcadj=self.Ks*self.ETc  #self.ETc ajustado	
 
         if  self.Irrigation + self.effectiveRain > self.depletion+self.ETc:            
@@ -134,14 +134,12 @@ class prescriptionMethods():
         else:
             self.Irrigation_pres_net=0.0
 
-        if self.crop.dayscrop >=130 and self.crop._crop=='Onion':
+        if self.crop.dayscrop >=130 and self.crop.typeCrop=='Onion':
             self.irr_pres_net=0.0   
         
         self.depletion=self.deficit
-        self.ks= (self.dTaw-self.depletion)/(self.dTaw*(1-self.sp_mae))
-        today = str(datetime.now()).split()[0]
-        hour  = str(datetime.now()).split()[1]
-        self.prescriptionResult.allDataPrescription = ['Moisture_Sensors',today,hour,self.irr_pres_net,self.deficit,
-        self.Kc,self.sp_rootdepth,self.dTaw,self.mad,self.Ks,self.ETcadj,self.effectiveRain,self.Etc]
+        self._today, self._hour = str(datetime.now()).split()[0],str(datetime.now()).split()[1]
+        self.prescriptionResult.allDataPrescription = ['ET0-Moisture_Sensors',self._today,self._hour,self.irr_pres_net,self.deficit,
+        self.Kc,self.sp_rootdepth,self.dTaw,self.mad,self.Ks,self.ETcadj,self.effectiveRain,self.ETc]
         self.saveDataPrescription(self.pathStorage,self.prescriptionResult.allDataPrescription) 
         return self.Irrigation_pres_net

@@ -4,6 +4,8 @@ from firebase_admin import credentials #ACCESO A LAS LLAVES PRIVADAS DEL MODULO 
 from firebase_admin import db  #ACCESO A LA BASE DE DATOS
 from firebase_admin import firestore  #ACCESO A LA BASE DE DATOS
 import threading
+from datetime import datetime, date, time, timedelta
+
 '''https://googleapis.dev/python/firestore/latest/document.html'''
 
 class FIREBASE_CLASS():
@@ -21,7 +23,23 @@ class FIREBASE_CLASS():
 
         doc = self.doc_ref.get()
         if doc.exists:
-            estate = doc.to_dict()
+            self.completeModel = doc.to_dict()
+            self.Crop = self.completeModel['Crop']
+            self.Irrig_Presc = self.completeModel['Irrigation/Prescription']    
+            #fecha de siembra/seed time
+            self._dateseed = str(self.Crop['SeedDate']).split('/')
+            self.cropModel.seedTime = date(int(self._dateseed[2]),int(self._dateseed[1]),int(self._dateseed[0]))
+            #Crop/cultivo
+            self.cropModel.typeCrop =  self.Crop['TypeCrop'] 
+            #pwp
+            self.cropModel.pointWp =  float(self.Crop['pwp'])
+            #capacidad de campo / fiel capacity
+            self.cropModel.FieldCap = float(self.Crop['field_capacity'])
+            #riego-prescripcion/ irrigation-prescription
+            self.cropModel.prescMode = self.Irrig_Presc['PrescriptionMethod']
+            self.cropModel.presctime = self.Irrig_Presc['PrescriptionTime']
+            self.cropModel.irrigationtime = self.Irrig_Presc['IrrigationTime']
+
         else:
             print(u'No such document!')
             self.doc_ref.set({
@@ -61,7 +79,7 @@ class FIREBASE_CLASS():
                 }
             })
         
-        
+    
 
         #changes to movil APP
         self.docRefview = firestoreDb.collection(u'Agents').document(u''+f'{self.AgentName}')
@@ -89,10 +107,9 @@ class FIREBASE_CLASS():
         for self.key in self.sharedKeys:
             if first[self.key] != second[self.key]:
                 print("Key: {}, Value 1: {}, Value 2: {}".format(self.key, first[self.key], second[self.key]))  
-
                 if (self.key == 'PrescriptionMethod') :
                     self.cropModel.prescMode  = second[self.key]
                 elif (self.key == 'PrescriptionTime') :
-                    self.cropModel.prescriptiontime = second[self.key]   
+                    self.cropModel.presctime = second[self.key] 
                 elif (self.key == 'IrrigationTime') :
-                    self.cropModel.irrigationtime  = second[self.key]       
+                    self.cropModel.irrigationtime  = second[self.key]     

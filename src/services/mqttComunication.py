@@ -42,10 +42,12 @@ class MqttComunication():
             if self.data[0]=="Rp":                               #si el mensaje inicia como Rp 
                 self.FlagPetition=True                                #se activa bandera de peticcion   
             elif self.data[0]=="Irr":                            #si el mensaje inicia como Irr=Riego    
-                if self.data[1]=="Cont":                         #si la accion es continuar    
+                if self.data[1]=="Cont":                         #si la accion es continuar
+                    print('Autorizacion Completa')    
                     self.FlagIrrigation=True                             #activa bandera de reigo por prescripcion local
                 elif self.data[1].split(";")[0]=="Neg":          #si es Neg
-                    if  self.num_GroundDivision== int(data[1].split(";")[1]):
-                        self.NewPrescription=int(data[1].split(";")[2])      #se guarda el dato del nuevo valor de prescipcion 
+                    print('Autorizacion Negociada') 
+                    if  self.num_GroundDivision== int(self.data[1].split(";")[1]):
+                        self.NewPrescription=int(self.data[1].split(";")[2])      #se guarda el dato del nuevo valor de prescipcion 
                         self.FlagNewIrrigation = True                            #se activa bandera de riego por negociacion
                 pass 

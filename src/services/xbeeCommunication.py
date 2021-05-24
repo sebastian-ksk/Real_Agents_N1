@@ -7,15 +7,18 @@ from datetime import datetime, date, time, timedelta #para fechas y hora
 
 class XbeeCommunication():
     Path_Data=""
-    xbees_properties={'Agent_1': ['0013A20041573102'], 
-    'Agent_2': ['0013A20040E8762A'],
-    'Agent_3': ['0013A20040E7412C'],
-    'Agent_4': ['0013A20040DADF27']}
+    
     def __init__(self, UsbDirection, baudRate,sensors):
+        self.XbeesValvesSystem={'Agent_1': '0013A20041573102', 
+        'Agent_2': '0013A20040E8762A',
+        'Agent_3': '0013A20040E7412C',
+        'Agent_4': '0013A20040DADF27'}
+        print('xbee  ')
         self.sensors = sensors
         self.Path_Data = '/home/pi/Desktop/Real_Agents_N1/src/storage'
         self.device=XBeeDevice(UsbDirection,baudRate)
         self.device.open()
+        print('xbee init ')
         # self.subproces_Sens=Thread(target=self.xbeeComm.runCallback)
         # self.subproces_Sens.daemon=True
         # self.subproces_Sens.start()
@@ -56,8 +59,10 @@ class XbeeCommunication():
 
     def sendIrrigationOrder(self,message,Agent,presc):
         try:
-            self.remote_device=RemoteXBeeDevice(self.device,XBee64BitAddress.from_hex_string('0013A20041573102'))     
-            self.device.send_data(self.remote_device,'SITASK;'+'1;'+str(presc))    
+            print(self.XbeesValvesSystem[f'Agent_{Agent}'])
+            self.remote_device=RemoteXBeeDevice(self.device,XBee64BitAddress.from_hex_string(self.XbeesValvesSystem[f'Agent_{Agent}']))     
+            self.device.send_data(self.remote_device,f'{message};1;{presc}')   
+            print('send xbee order .') 
             return True
         except:
             return False
